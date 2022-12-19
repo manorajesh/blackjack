@@ -1,6 +1,6 @@
 use rand::thread_rng;
 use rand::seq::SliceRandom;
-use ncursesw::*;
+use ncurses::*;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -16,6 +16,9 @@ fn input() {
 }
 
 fn main() {
+    let locale_conf = LcCategory::all;
+    setlocale(locale_conf, "en_US.UTF-8");
+
     let mut player_hand: Vec<String>;
     let mut dealer_hand: Vec<String>;
     let mut bet = String::new();
@@ -43,7 +46,7 @@ fn main() {
             refresh();
 
             if hand_total(&player_hand) == 21 {
-                addstr(format!("\nBlackjack! {}", hand_total(&player_hand)).as_str());
+                addstr(format!("\n\nBlackjack! {}", hand_total(&player_hand)).as_str());
                 refresh();
                 getch();
                 break;
@@ -58,7 +61,7 @@ fn main() {
                     clear();
                     addstr(format!("{} *\n", dealer_hand[0]).as_str());
                     addstr(player_hand.join(" ").as_str());
-                    addstr(format!("\nLost ;( {}", hand_total(&player_hand)).as_str());
+                    addstr(format!("\n\nLost ;( {}", hand_total(&player_hand)).as_str());
                     refresh();
                     getch();
                     break;
@@ -81,7 +84,7 @@ fn main() {
                 refresh();
                 getch();
                 break;
-            } else if dealer_hand_total > hand_total(&player_hand) || dealer_hand_total == 21 {
+            } if dealer_hand_total > hand_total(&player_hand) || dealer_hand_total == 21 {
                 addstr(format!("\n\nLost ;( You have {} and dealer has {}", hand_total(&player_hand), hand_total(&dealer_hand)).as_str());
                 refresh();
                 getch();
