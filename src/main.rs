@@ -1,27 +1,16 @@
 use rand::thread_rng;
 use rand::seq::SliceRandom;
-use ncurses::*;
+use pancurses::*;
 use std::thread::sleep;
 use std::time::Duration;
 
-fn input() {
-    let mut buffer = String::new();
-    let mut usr_input: u8 = 0;
-
-    while usr_input != '\n' as u8 {
-        usr_input = getch() as u8;
-        buffer.push(usr_input as char);
-        refresh();
-    }
-}
-
 fn main() {
-    let locale_conf = LcCategory::all;
-    setlocale(locale_conf, "en_US.UTF-8");
+    // let locale_conf = LcCategory::all;
+    // setlocale(locale_conf, "en_US.UTF-8");
 
     let mut player_hand: Vec<String>;
     let mut dealer_hand: Vec<String>;
-    let mut bet = String::new();
+    let bet = 10;
     let mut total = 1000;
     
     // Clunky city
@@ -30,42 +19,69 @@ fn main() {
     "2♠", "3♠", "4♠", "5♠", "6♠", "7♠", "8♠", "9♠", "10♠", "J♠", "Q♠", "K♠", "A♠","2♦", "3♦", "4♦", 
     "5♦", "6♦", "7♦", "8♦", "9♦", "10♦", "J♦", "Q♦", "K♦", "A♦"].iter().map(|&x| x.into()).collect();
 
-    initscr();
+    let term = initscr();
     noecho();
+    curs_set(0);
+    start_color();
+    use_default_colors();
+    init_pair(30, 1, -1);
+    let dims = term.get_max_yx();
+    let scr = newwin(10, 30, dims.0/2-3, dims.1/2-9);
+    scr.keypad(true);
 
-    let mut usr_input: char = 'a'; // placeholder
-    while usr_input != 'q' {
+    loop {
         deck.shuffle(&mut thread_rng());
         dealer_hand = deck[0..2].try_into().unwrap();
         player_hand = deck[2..4].try_into().unwrap();
 
         loop {
-            clear();
-            addstr(format!("{} *\n", dealer_hand[0]).as_str());
-            addstr(player_hand.join(" ").as_str());
-            refresh();
+            scr.clear();
+            scr.attrset(A_DIM);
+            scr.addstr("Blackjack────────────\n\n");
+            scr.attrset(A_NORMAL);
+            scr.addstr(format!("Total: {:3} - Bet: {}\n─────|\n", total, bet));
+            scr.addstr(format!("{} *\n", dealer_hand[0]).as_str());
+            scr.addstr(player_hand.join(" ").as_str());
+            scr.refresh();
 
             if hand_total(&player_hand) == 21 {
-                addstr(format!("\n\nBlackjack! {}", hand_total(&player_hand)).as_str());
-                refresh();
-                getch();
+                scr.addstr(format!("\n\nBlackjack! {}", hand_total(&player_hand)).as_str());
+                let gain = bet + (bet/2) as i32;
+                total += gain;
+                scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                scr.refresh();
+                scr.getch();
                 break;
             }
-    
-            usr_input = getch() as u8 as char;
-            if usr_input == 's' {
-                break;
-            } else if usr_input == 'h' {
-                player_hand.append(&mut draw(deck.clone(), 1));
-                if hand_total(&player_hand) > 21 {
-                    clear();
-                    addstr(format!("{} *\n", dealer_hand[0]).as_str());
-                    addstr(player_hand.join(" ").as_str());
-                    addstr(format!("\n\nLost ;( {}", hand_total(&player_hand)).as_str());
-                    refresh();
-                    getch();
-                    break;
-                }
+
+            match scr.getch() {
+                Some(Input::Character(char)) => {
+                    if char == 'h' {
+                        player_hand.append(&mut draw(deck.clone(), 1));
+                        if hand_total(&player_hand) > 21 {
+                            scr.clear();
+                            scr.attrset(A_DIM);
+                            scr.addstr("Blackjack────────────\n\n");
+                            scr.attrset(A_NORMAL);
+                            scr.addstr(format!("Total: {:3} - Bet: {}\n─────|\n", total, bet));
+                            scr.addstr(format!("{} *\n", dealer_hand[0]).as_str());
+                            scr.addstr(player_hand.join(" ").as_str());
+                            scr.addstr(format!("\n\nLost ;( {}", hand_total(&player_hand)).as_str());
+                            let gain = -bet;
+                            total += gain;
+                            scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                            scr.refresh();
+                            scr.getch();
+                            break;
+                        }
+                    } else if char == 's' {
+                        break;
+                    } else if char == 'q' {
+                        endwin();
+                        return;
+                    }
+                },
+                _ => ()
             }
         }
 
@@ -73,26 +89,35 @@ fn main() {
             dealer_hand.append(&mut draw(deck.clone(), 1));
             let dealer_hand_total = hand_total(&dealer_hand);
 
-            clear();
-            addstr(format!("{}\n", dealer_hand.join(" ")).as_str());
-            addstr(player_hand.join(" ").as_str());
-            refresh();
+            scr.clear();
+            scr.attrset(A_DIM);
+            scr.addstr("Blackjack────────────\n\n");
+            scr.attrset(A_NORMAL);
+            scr.addstr(format!("Total: {:3} - Bet: {}\n─────|\n", total, bet));
+            scr.addstr(format!("{}\n", dealer_hand.join(" ")).as_str());
+            scr.addstr(player_hand.join(" ").as_str());
+            scr.refresh();
             sleep(Duration::from_millis(500));
 
             if dealer_hand_total > 21 {
-                addstr(format!("\n\nWon! You have {} and dealer has {}", hand_total(&player_hand), hand_total(&dealer_hand)).as_str());
-                refresh();
-                getch();
+                scr.addstr(format!("\n\nWon! You have {} and dealer has {}", hand_total(&player_hand), hand_total(&dealer_hand)).as_str());
+                let gain = bet;
+                total += gain;
+                scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                scr.refresh();
+                scr.getch();
                 break;
             } if dealer_hand_total > hand_total(&player_hand) || dealer_hand_total == 21 {
-                addstr(format!("\n\nLost ;( You have {} and dealer has {}", hand_total(&player_hand), hand_total(&dealer_hand)).as_str());
-                refresh();
-                getch();
+                scr.addstr(format!("\n\nLost ;( You have {} and dealer has {}", hand_total(&player_hand), hand_total(&dealer_hand)).as_str());
+                let gain = -bet;
+                total += gain;
+                scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                scr.refresh();
+                scr.getch();
                 break;
             }
         }
     }
-    endwin();
 }
 
 fn draw(mut deck: Vec<String>, num_of_cards: usize) -> Vec<String> {
