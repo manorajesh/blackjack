@@ -1,3 +1,6 @@
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 use pancurses::*;
@@ -10,10 +13,10 @@ fn main() {
 
     let mut player_hand: Vec<String>;
     let mut dealer_hand: Vec<String>;
-    let bet = 10;
+    let mut bet = 10;
     let mut total = 1000;
     
-    // Clunky city
+    // Clunk city
     let mut deck: Vec<String> = vec!["2♣", "3♣", "4♣", "5♣", "6♣", "7♣", "8♣", "9♣", "10♣", "J♣", 
     "Q♣", "K♣", "A♣","2♥", "3♥", "4♥", "5♥", "6♥", "7♥", "8♥", "9♥", "10♥", "J♥", "Q♥", "K♥", "A♥",
     "2♠", "3♠", "4♠", "5♠", "6♠", "7♠", "8♠", "9♠", "10♠", "J♠", "Q♠", "K♠", "A♠","2♦", "3♦", "4♦", 
@@ -24,31 +27,35 @@ fn main() {
     curs_set(0);
     start_color();
     use_default_colors();
-    init_pair(30, 1, -1);
+    init_pair(30, COLOR_RED, -1);
     let dims = term.get_max_yx();
-    let scr = newwin(10, 30, dims.0/2-3, dims.1/2-9);
+    let scr = newwin(10, 50, dims.0/2-3, dims.1/2-9);
     scr.keypad(true);
+    scr.refresh();
 
     loop {
         deck.shuffle(&mut thread_rng());
         dealer_hand = deck[0..2].try_into().unwrap();
         player_hand = deck[2..4].try_into().unwrap();
 
+        scr.clear();
+        scr.attrset(A_DIM);
+        scr.addstr("Blackjack────────────\n\n");
+        scr.attrset(A_NORMAL);
+
         loop {
-            scr.clear();
-            scr.attrset(A_DIM);
-            scr.addstr("Blackjack────────────\n\n");
+            scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────|\n", total, bet));
+            scr.attrset(A_BOLD + COLOR_PAIR(30));
+            scr.mvaddstr(4, 0, format!("{} *\n", dealer_hand[0]).as_str());
+            scr.mvaddstr(5, 0, player_hand.join(" ").as_str());
             scr.attrset(A_NORMAL);
-            scr.addstr(format!("Total: {:3} - Bet: {}\n─────|\n", total, bet));
-            scr.addstr(format!("{} *\n", dealer_hand[0]).as_str());
-            scr.addstr(player_hand.join(" ").as_str());
             scr.refresh();
 
             if hand_total(&player_hand) == 21 {
                 scr.addstr(format!("\n\nBlackjack! {}", hand_total(&player_hand)).as_str());
                 let gain = bet + (bet/2) as i32;
                 total += gain;
-                scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────| {:+}\n", total, bet, gain));
                 scr.refresh();
                 scr.getch();
                 break;
@@ -56,29 +63,34 @@ fn main() {
 
             match scr.getch() {
                 Some(Input::Character(char)) => {
-                    if char == 'h' {
+                    if char == 'h' || char == 'H' {
                         player_hand.append(&mut draw(deck.clone(), 1));
                         if hand_total(&player_hand) > 21 {
-                            scr.clear();
-                            scr.attrset(A_DIM);
-                            scr.addstr("Blackjack────────────\n\n");
+                            scr.attrset(A_BOLD + COLOR_PAIR(30));
+                            scr.mvaddstr(5, 0, player_hand.join(" ").as_str());
                             scr.attrset(A_NORMAL);
-                            scr.addstr(format!("Total: {:3} - Bet: {}\n─────|\n", total, bet));
-                            scr.addstr(format!("{} *\n", dealer_hand[0]).as_str());
-                            scr.addstr(player_hand.join(" ").as_str());
                             scr.addstr(format!("\n\nLost ;( {}", hand_total(&player_hand)).as_str());
+
                             let gain = -bet;
                             total += gain;
-                            scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                            scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────| {:+}\n", total, bet, gain));
                             scr.refresh();
                             scr.getch();
                             break;
                         }
-                    } else if char == 's' {
+                    } else if char == 's' || char == ' ' || char == 'S' {
                         break;
-                    } else if char == 'q' {
+                    } else if char == 'q' || char == 'Q' {
                         endwin();
                         return;
+                    } else if char == '+' || char == '=' {
+                        bet += 5;
+                        scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────|\n", total, bet));
+                        scr.refresh();
+                    } else if char == '-' || char == '_'{
+                        bet -= 5;
+                        scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────|\n", total, bet));
+                        scr.refresh();
                     }
                 },
                 _ => ()
@@ -89,21 +101,20 @@ fn main() {
             dealer_hand.append(&mut draw(deck.clone(), 1));
             let dealer_hand_total = hand_total(&dealer_hand);
 
-            scr.clear();
-            scr.attrset(A_DIM);
-            scr.addstr("Blackjack────────────\n\n");
+            scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────|\n", total, bet));
+
+            scr.attrset(A_BOLD + COLOR_PAIR(30));
+            scr.mvaddstr(4, 0, format!("{}\n", dealer_hand.join(" ")).as_str());
+            scr.mvaddstr(5, 0, player_hand.join(" ").as_str());
             scr.attrset(A_NORMAL);
-            scr.addstr(format!("Total: {:3} - Bet: {}\n─────|\n", total, bet));
-            scr.addstr(format!("{}\n", dealer_hand.join(" ")).as_str());
-            scr.addstr(player_hand.join(" ").as_str());
             scr.refresh();
-            sleep(Duration::from_millis(500));
+            sleep(Duration::from_millis(100));
 
             if dealer_hand_total > 21 {
                 scr.addstr(format!("\n\nWon! You have {} and dealer has {}", hand_total(&player_hand), hand_total(&dealer_hand)).as_str());
                 let gain = bet;
                 total += gain;
-                scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────| {:+}\n", total, bet, gain));
                 scr.refresh();
                 scr.getch();
                 break;
@@ -111,7 +122,7 @@ fn main() {
                 scr.addstr(format!("\n\nLost ;( You have {} and dealer has {}", hand_total(&player_hand), hand_total(&dealer_hand)).as_str());
                 let gain = -bet;
                 total += gain;
-                scr.mvaddstr(2, 0, format!("Total: {:3} - Bet: {}\n─────| {:+}\n", total, bet, gain));
+                scr.mvaddstr(2, 0, format!("Total: {:3} ~ Bet: {}\n─────| {:+}\n", total, bet, gain));
                 scr.refresh();
                 scr.getch();
                 break;
